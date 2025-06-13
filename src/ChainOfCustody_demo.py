@@ -2,7 +2,7 @@
 ========================
 ChainOfCustody_demo module
 ========================
-@TaskDescription: This module provides a wrapper around web3.py API to interact with the EvidenceChainOfCustody smart contrac
+@TaskDescription: This module provides a wrapper around web3.py API to interact with the EvidenceChainOfCustody smart contract.
 """
 from web3 import Web3, HTTPProvider
 import json
