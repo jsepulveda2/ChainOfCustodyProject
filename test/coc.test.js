@@ -15,10 +15,20 @@ contract("EvidenceChainOfCustody with EvidenceAccessControl", accounts => {
     coc = await EvidenceChainOfCustody.new(acToken.address, {from: admin});
   });
 
-  it("should register evidence and assign AC to creator", async () => {
+  it("should register evidence and allow admin to assign AC to creator", async () => {
     await coc.registerEvidence(
       caseId, evidenceId, "Alice", description, ipfsHash, "collected", {from: alice}
     );
+    // At this point, Alice has registered, but does NOT have AC yet
+    let hasAccess = await acToken.query_CapAC(key, alice);
+    assert.equal(hasAccess, false);
+
+    // Admin assigns AC to Alice
+    await acToken.assignAC(key, alice, {from: admin});
+    hasAccess = await acToken.query_CapAC(key, alice);
+    assert.equal(hasAccess, true);
+
+    // Now Alice can view
     const ev = await coc.viewEvidence(caseId, evidenceId, {from: alice});
     assert.equal(ev[0], evidenceId);
     assert.equal(ev[1], alice);
@@ -26,21 +36,18 @@ contract("EvidenceChainOfCustody with EvidenceAccessControl", accounts => {
     assert.equal(ev[3], description);
     assert.equal(ev[4], ipfsHash);
     assert.equal(ev[5], false);
-
-    // Alice should have AC token
-    const hasAccess = await acToken.query_CapAC(key, alice);
-    assert.equal(hasAccess, true);
   });
 
   it("should transfer custody and grant AC to new holder", async () => {
+    // Admin assigns AC to Bob first (as only admin can assign)
+    await acToken.assignAC(key, bob, {from: admin});
     await coc.transferEvidence(
       caseId, evidenceId, bob, "Bob", "transferred", "For analysis", {from: alice}
     );
     const ev = await coc.viewEvidence(caseId, evidenceId, {from: bob});
     assert.equal(ev[1], bob);
     assert.equal(ev[2], "Bob");
-
-    // Bob should have AC token
+    // Bob now has access
     const hasAccess = await acToken.query_CapAC(key, bob);
     assert.equal(hasAccess, true);
   });
@@ -99,6 +106,8 @@ contract("EvidenceChainOfCustody with EvidenceAccessControl", accounts => {
     await coc.registerEvidence(
       caseId, evidenceId2, "Bob", "USB Drive", "QmUSBHash", "collected", {from: bob}
     );
+    await acToken.assignAC(key2, bob, {from: admin});
+    await acToken.assignAC(key2, alice, {from: admin});
     await coc.transferEvidence(
       caseId, evidenceId2, alice, "Alice", "transferred", "Returned to Alice", {from: bob}
     );
