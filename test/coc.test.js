@@ -1,67 +1,112 @@
-const CoC = artifacts.require("CoC");
+const EvidenceAccessControl = artifacts.require("EvidenceAccessControl");
+const EvidenceChainOfCustody = artifacts.require("EvidenceChainOfCustody");
 
-contract("CoC", accounts => {
+contract("EvidenceChainOfCustody with EvidenceAccessControl", accounts => {
   const [admin, alice, bob, carol] = accounts;
+  let acToken, coc;
+  const caseId = "CASE123";
+  const evidenceId = "EV1";
+  const ipfsHash = "QmTestHash";
+  const description = "Forensic laptop";
+  const key = web3.utils.soliditySha3(caseId, evidenceId);
 
-  it("should register new evidence", async () => {
-    const coc = await CoC.deployed();
+  before(async () => {
+    acToken = await EvidenceAccessControl.new({from: admin});
+    coc = await EvidenceChainOfCustody.new(acToken.address, {from: admin});
+  });
+
+  it("should register evidence and assign AC to creator", async () => {
     await coc.registerEvidence(
-      "CASE123", "EV1", "Alice", "Laptop evidence", "QmHash", "collected",
-      {from: alice}
+      caseId, evidenceId, "Alice", description, ipfsHash, "collected", {from: alice}
     );
-    const ev = await coc.viewEvidence("CASE123", "EV1", {from: alice});
-    assert.equal(ev[0], "EV1");
-    assert.equal(ev[1], "CASE123");
-    assert.equal(ev[2], alice);
-    assert.equal(ev[3], "Alice");
-    assert.equal(ev[4], "Laptop evidence");
-    assert.equal(ev[5], "QmHash");
-    assert.equal(ev[6], false);
+    const ev = await coc.viewEvidence(caseId, evidenceId, {from: alice});
+    assert.equal(ev[0], evidenceId);
+    assert.equal(ev[1], alice);
+    assert.equal(ev[2], "Alice");
+    assert.equal(ev[3], description);
+    assert.equal(ev[4], ipfsHash);
+    assert.equal(ev[5], false);
+
+    // Alice should have AC token
+    const hasAccess = await acToken.query_CapAC(key, alice);
+    assert.equal(hasAccess, true);
   });
 
-  it("should transfer custody", async () => {
-    const coc = await CoC.deployed();
+  it("should transfer custody and grant AC to new holder", async () => {
     await coc.transferEvidence(
-      "CASE123", "EV1", bob, "Bob", "transferred", "For analysis",
-      {from: alice}
+      caseId, evidenceId, bob, "Bob", "transferred", "For analysis", {from: alice}
     );
-    const ev = await coc.viewEvidence("CASE123", "EV1", {from: bob});
-    assert.equal(ev[2], bob);
-    assert.equal(ev[3], "Bob");
+    const ev = await coc.viewEvidence(caseId, evidenceId, {from: bob});
+    assert.equal(ev[1], bob);
+    assert.equal(ev[2], "Bob");
+
+    // Bob should have AC token
+    const hasAccess = await acToken.query_CapAC(key, bob);
+    assert.equal(hasAccess, true);
   });
 
-  it("should grant and revoke access", async () => {
-    const coc = await CoC.deployed();
-    await coc.grantAccess("CASE123", "EV1", carol, {from: bob});
-    let ev = await coc.viewEvidence("CASE123", "EV1", {from: carol});
-    assert.equal(ev[0], "EV1");
-    await coc.revokeAccess("CASE123", "EV1", carol, {from: bob});
+  it("should allow admin to assign and revoke access (AC token)", async () => {
+    // Carol does NOT have access yet
+    let carolAccess = await acToken.query_CapAC(key, carol);
+    assert.equal(carolAccess, false);
+
+    // Admin assigns AC to Carol
+    await acToken.assignAC(key, carol, {from: admin});
+    carolAccess = await acToken.query_CapAC(key, carol);
+    assert.equal(carolAccess, true);
+
+    // Carol can now view evidence
+    const ev = await coc.viewEvidence(caseId, evidenceId, {from: carol});
+    assert.equal(ev[0], evidenceId);
+
+    // Admin revokes Carol's access
+    await acToken.revokeAC(key, carol, {from: admin});
+    carolAccess = await acToken.query_CapAC(key, carol);
+    assert.equal(carolAccess, false);
+
+    // Carol cannot view evidence anymore
     try {
-      await coc.viewEvidence("CASE123", "EV1", {from: carol});
+      await coc.viewEvidence(caseId, evidenceId, {from: carol});
       assert.fail("Carol should not have access after revoke");
     } catch (e) {
       assert(e.message.includes("Not authorized"));
     }
   });
 
-  it("should soft delete evidence", async () => {
-    const coc = await CoC.deployed();
-    await coc.deleteEvidence("CASE123", "EV1", {from: bob});
-    const ev = await coc.viewEvidence("CASE123", "EV1", {from: admin});
-    assert.equal(ev[6], true);
+  it("should soft delete evidence and allow only admin and holder to view", async () => {
+    // Bob (holder) deletes
+    await coc.deleteEvidence(caseId, evidenceId, {from: bob});
+    const ev = await coc.viewEvidence(caseId, evidenceId, {from: bob});
+    assert.equal(ev[5], true); // isDeleted
+
+    // Admin can still view
+    const evAdmin = await coc.viewEvidence(caseId, evidenceId, {from: admin});
+    assert.equal(evAdmin[5], true);
+
+    // Alice cannot view (unless admin assigns AC back)
+    try {
+      await coc.viewEvidence(caseId, evidenceId, {from: alice});
+      assert.fail("Alice should not have access after deletion");
+    } catch (e) {
+      assert(e.message.includes("Not authorized"));
+    }
   });
 
-  it("should record full history", async () => {
-    const coc = await CoC.deployed();
+  it("should record full custody history", async () => {
+    // Register new evidence for a clean history
+    const evidenceId2 = "EV2";
+    const key2 = web3.utils.soliditySha3(caseId, evidenceId2);
     await coc.registerEvidence(
-      "CASE123", "EV2", "Bob", "USB evidence", "QmUSB", "collected", {from: bob}
+      caseId, evidenceId2, "Bob", "USB Drive", "QmUSBHash", "collected", {from: bob}
     );
     await coc.transferEvidence(
-      "CASE123", "EV2", alice, "Alice", "transferred", "Returned to Alice", {from: bob}
+      caseId, evidenceId2, alice, "Alice", "transferred", "Returned to Alice", {from: bob}
     );
-    const history = await coc.getHistory("CASE123", "EV2", {from: admin});
+    const history = await coc.getHistory(caseId, evidenceId2, {from: admin});
     assert.equal(history.length, 2);
     assert.equal(history[0].holderName, "Bob");
     assert.equal(history[1].holderName, "Alice");
+    assert.equal(history[0].action, "collected");
+    assert.equal(history[1].action, "transferred");
   });
 });
