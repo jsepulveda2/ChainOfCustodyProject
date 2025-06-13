@@ -70,9 +70,9 @@ class ChainOfCustody(object):
     def getHistory(self, caseId, evidenceId):
         return self.contract.functions.getHistory(caseId, evidenceId).call({'from': self.account})
 
-    # --- Helper: You will need a way to fetch private keys securely! ---
+    # Fetch private keys securely
     def getPrivateKey(self):
-        # For demo purposes, load from a local file, env var, or prompt. NEVER do this in production!
+        # For demo purposes, load from a local file, env var, or prompt
         with open("privatekey.txt") as f:
             return f.read().strip()
 

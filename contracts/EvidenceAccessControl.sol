@@ -2,9 +2,9 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
-/// @title Evidence Access Control Token (AC_Token) for Capability-Based Permissions
-/// @notice This contract manages access permissions (capabilities) for evidence items.
-///         It is designed to be used alongside a main Evidence contract.
+// Evidence Access Control Token for Capability-Based Permissions
+// This contract manages access permissions (capabilities) for evidence items.
+
 
 contract EvidenceAccessControl {
     address public admin;
@@ -24,24 +24,24 @@ contract EvidenceAccessControl {
         admin = _admin;
     }
 
-    /// @notice Allow admin to be updated after deployment, for flexibility
+    // Allow admin to be updated after deployment
     function setAdmin(address _admin) external onlyAdmin {
         admin = _admin;
     }
 
-    /// @notice Assign capability/access to a user for a specific evidence
+    // Assign access to a user for a specific evidence
     function assignAC(bytes32 evidenceKey, address user) external onlyAdmin {
         access[evidenceKey][user] = true;
         emit AccessAssigned(evidenceKey, user, block.timestamp);
     }
 
-    /// @notice Revoke capability/access from a user for a specific evidence
+    // Revoke capability/access from a user for a specific evidence
     function revokeAC(bytes32 evidenceKey, address user) external onlyAdmin {
         access[evidenceKey][user] = false;
         emit AccessRevoked(evidenceKey, user, block.timestamp);
     }
 
-    /// @notice Query if a user has capability/access for a specific evidence
+    // Query if a user has capability/access for a specific evidence
     function query_CapAC(bytes32 evidenceKey, address user) external view returns (bool) {
         return access[evidenceKey][user];
     }
