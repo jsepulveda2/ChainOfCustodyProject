@@ -1,0 +1,19 @@
+{
+  "name": "chainofcustodyproject",
+  "version": "1.0.0",
+  "main": "hardhat.config.js",
+  "directories": {
+    "test": "test"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "dependencies": {
+    "ipfs-http-client": "^60.0.1",
+    "truffle": "^5.11.5"
+  }
+}
