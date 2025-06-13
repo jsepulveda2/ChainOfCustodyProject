@@ -1,178 +1,297 @@
-// contracts/CoC.sol
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
+
 contract CoC {
-    // Each action taken with evidence (like transfer, collection, etc.) is recorded in this struct
+    // --- ADMINISTRATION ---
+    address public admin;
+
+    modifier onlyAdmin() {
+        require(msg.sender == admin, "Not admin");
+        _;
+    }
+
+    constructor() {
+        admin = msg.sender;
+    }
+
+    // --- DATA STRUCTURES ---
+
+    /// @notice Records every action taken on evidence
     struct CustodyEvent {
-        address ownerAccount;      // Ethereum address of the person doing the action
-        string ownerName;          // Name of the person
-        string action;             // What was done (e.g., collected, transferred, analyzed)
-        string description;        // Optional details about the action
-        uint256 timestamp;         // When the action happened
+        address holderAddress;
+        string holderName;
+        string action;       // "collected", "transferred", "analyzed", "deleted", "grant", "revoke"
+        string description;  // Details about the action, can include rationale or context
+        uint256 timestamp;
     }
 
-    // Information about the actual piece of evidence
+    /// @notice Digital evidence and its chain of custody
     struct Evidence {
-        string evidenceId;         // Unique ID for the evidence
-        string description;        // Description of what the evidence is
-        address currentOwner;      // Ethereum address of the person currently holding the evidence
-        string currentOwnerName;   // Name of the current holder
-        string ipfsHash;           // IPFS hash pointing to the digital file or data
-        bool isDeleted;            // Whether the evidence has been deleted (soft delete)
-        mapping(address => bool) accessList; // Addresses allowed to view this evidence
-        CustodyEvent[] history;    // Record of everything that's happened to this evidence
+        string caseId;             // Investigation/case namespace
+        string evidenceId;         // Unique within caseId
+        address currentHolder;     // Current holder's address
+        string currentHolderName;  // Current holder's name
+        string description;        // Description/details, may reference raw evidence, e.g., IPFS CID
+        string ipfsHash;           // IPFS hash (immutable reference to raw data)
+        bool isDeleted;            // Soft delete flag
+        CustodyEvent[] history;    // Full chain of custody & access events
+        mapping(address => bool) accessList; // Who can view this evidence
+        address[] accessAddresses;           // Track all addresses ever granted access
     }
 
-    // Maps each evidence ID to its corresponding data
-    mapping(string => Evidence) private evidences;
+    // --- STORAGE ---
 
-    // Stores list of all evidence IDs for tracking/counting
-    string[] private evidenceIds;
+    mapping(bytes32 => Evidence) private evidences; // key = hash(caseId, evidenceId)
+    bytes32[] private evidenceKeys;
 
-    // Event logs for the blockchain to track
-    event EvidenceRegistered(string evidenceId, string ownerName, address indexed ownerAccount, string ipfsHash, uint256 timestamp, string action);
-    event EvidenceTransferred(string evidenceId, address indexed from, address indexed to, string action, uint256 timestamp);
-    event EvidenceDeleted(string evidenceId, uint256 timestamp);
-    event AccessGranted(string evidenceId, address indexed grantee);
-    event AccessRevoked(string evidenceId, address indexed grantee);
+    // --- EVENTS ---
 
-    // Only allow the current evidence holder to do certain things
-    modifier onlyOwner(string memory _evidenceId) {
-        require(evidences[_evidenceId].currentOwner == msg.sender, "Not evidence owner");
-        require(!evidences[_evidenceId].isDeleted, "Evidence is deleted");
+    event EvidenceRegistered(string caseId, string evidenceId, address holder, string holderName, string ipfsHash, uint256 timestamp);
+    event EvidenceTransferred(string caseId, string evidenceId, address from, address to, string action, uint256 timestamp);
+    event EvidenceDeleted(string caseId, string evidenceId, uint256 timestamp);
+    event AccessGranted(string caseId, string evidenceId, address grantee, uint256 timestamp);
+    event AccessRevoked(string caseId, string evidenceId, address grantee, uint256 timestamp);
+
+    // --- UTILITIES ---
+
+    // Compute evidence key from caseId and evidenceId
+    function computeKey(string memory caseId, string memory evidenceId) public pure returns (bytes32) {
+        return keccak256(abi.encodePacked(caseId, evidenceId));
+    }
+
+    // --- MODIFIERS ---
+
+    modifier evidenceExists(bytes32 key) {
+        require(bytes(evidences[key].evidenceId).length != 0, "Evidence does not exist");
         _;
     }
 
-    // Makes sure the evidence actually exists before proceeding
-    modifier evidenceExists(string memory _evidenceId) {
-        require(bytes(evidences[_evidenceId].evidenceId).length != 0, "Evidence does not exist");
+    modifier onlyHolderOrAdmin(bytes32 key) {
+        require(msg.sender == admin || evidences[key].currentHolder == msg.sender, "Not holder or admin");
         _;
     }
 
-    // Ensures the caller has permission to view the evidence
-    modifier hasAccess(string memory _evidenceId) {
+    modifier canAudit(bytes32 key) {
         require(
-            evidences[_evidenceId].currentOwner == msg.sender ||
-            evidences[_evidenceId].accessList[msg.sender],
-            "No access to evidence"
+            msg.sender == admin ||
+            evidences[key].currentHolder == msg.sender ||
+            evidences[key].accessList[msg.sender],
+            "No audit access"
         );
         _;
     }
 
-    // Register a new piece of evidence in the system
+    // --- CORE FUNCTIONS ---
+
+    /// @notice Register new evidence (initial custody)
     function registerEvidence(
-        string memory _evidenceId,
-        string memory _description,
-        string memory _ownerName,
-        string memory _ipfsHash,
-        string memory _action
+        string memory caseId,
+        string memory evidenceId,
+        string memory holderName,
+        string memory description,
+        string memory ipfsHash,
+        string memory action
     ) public {
-        require(bytes(evidences[_evidenceId].evidenceId).length == 0, "Evidence already exists");
-
-        Evidence storage e = evidences[_evidenceId];
-        e.evidenceId = _evidenceId;
-        e.description = _description;
-        e.currentOwner = msg.sender;
-        e.currentOwnerName = _ownerName;
-        e.ipfsHash = _ipfsHash;
+        bytes32 key = computeKey(caseId, evidenceId);
+        require(bytes(evidences[key].evidenceId).length == 0, "Evidence already exists");
+        Evidence storage e = evidences[key];
+        e.caseId = caseId;
+        e.evidenceId = evidenceId;
+        e.currentHolder = msg.sender;
+        e.currentHolderName = holderName;
+        e.description = description;
+        e.ipfsHash = ipfsHash;
         e.isDeleted = false;
-        evidenceIds.push(_evidenceId);
+        evidenceKeys.push(key);
 
-        // Record the initial action (usually "collected" or "created")
         e.history.push(CustodyEvent({
-            ownerAccount: msg.sender,
-            ownerName: _ownerName,
-            action: _action,
-            description: _description,
+            holderAddress: msg.sender,
+            holderName: holderName,
+            action: action,
+            description: description,
             timestamp: block.timestamp
         }));
 
-        emit EvidenceRegistered(_evidenceId, _ownerName, msg.sender, _ipfsHash, block.timestamp, _action);
+        emit EvidenceRegistered(caseId, evidenceId, msg.sender, holderName, ipfsHash, block.timestamp);
     }
 
-    // Transfer ownership of evidence to someone else
+    /// @notice Transfer custody to a new holder
     function transferEvidence(
-        string memory _evidenceId,
-        address _to,
-        string memory _toName,
-        string memory _action,
-        string memory _description
-    )
-        public
-        evidenceExists(_evidenceId)
-        onlyOwner(_evidenceId)
-    {
-        Evidence storage e = evidences[_evidenceId];
-        address previousOwner = e.currentOwner;
-        e.currentOwner = _to;
-        e.currentOwnerName = _toName;
-
-        // Add to history log
+        string memory caseId,
+        string memory evidenceId,
+        address to,
+        string memory toName,
+        string memory action,
+        string memory description
+    ) public {
+        bytes32 key = computeKey(caseId, evidenceId);
+        Evidence storage e = evidences[key];
+        require(!e.isDeleted, "Evidence is deleted");
+        require(e.currentHolder == msg.sender, "Not current holder");
+        require(to != msg.sender, "Cannot transfer to self");
+        address from = e.currentHolder;
+        e.currentHolder = to;
+        e.currentHolderName = toName;
         e.history.push(CustodyEvent({
-            ownerAccount: _to,
-            ownerName: _toName,
-            action: _action,
-            description: _description,
+            holderAddress: to,
+            holderName: toName,
+            action: action,
+            description: description,
             timestamp: block.timestamp
         }));
-
-        emit EvidenceTransferred(_evidenceId, previousOwner, _to, _action, block.timestamp);
+        emit EvidenceTransferred(caseId, evidenceId, from, to, action, block.timestamp);
     }
 
-    // Give someone else permission to view evidence details
-    function grantAccess(string memory _evidenceId, address _grantee) public evidenceExists(_evidenceId) onlyOwner(_evidenceId) {
-        evidences[_evidenceId].accessList[_grantee] = true;
-        emit AccessGranted(_evidenceId, _grantee);
+    /// @notice Soft-delete evidence (cannot be undone)
+    function deleteEvidence(
+        string memory caseId,
+        string memory evidenceId
+    ) public {
+        bytes32 key = computeKey(caseId, evidenceId);
+        Evidence storage e = evidences[key];
+        require(!e.isDeleted, "Already deleted");
+        require(e.currentHolder == msg.sender || msg.sender == admin, "Not current holder or admin");
+        e.isDeleted = true;
+        e.history.push(CustodyEvent({
+            holderAddress: msg.sender,
+            holderName: e.currentHolderName,
+            action: "deleted",
+            description: "Evidence soft-deleted",
+            timestamp: block.timestamp
+        }));
+        emit EvidenceDeleted(caseId, evidenceId, block.timestamp);
     }
 
-    // Remove someone's viewing access
-    function revokeAccess(string memory _evidenceId, address _grantee) public evidenceExists(_evidenceId) onlyOwner(_evidenceId) {
-        evidences[_evidenceId].accessList[_grantee] = false;
-        emit AccessRevoked(_evidenceId, _grantee);
+    // --- ACCESS CONTROL & AUDIT ---
+
+    /// @notice Grant access to another address
+    function grantAccess(
+        string memory caseId,
+        string memory evidenceId,
+        address grantee
+    ) public {
+        bytes32 key = computeKey(caseId, evidenceId);
+        Evidence storage e = evidences[key];
+        require(!e.isDeleted, "Evidence is deleted");
+        require(e.currentHolder == msg.sender || msg.sender == admin, "Not current holder or admin");
+        if (!e.accessList[grantee]) {
+            e.accessList[grantee] = true;
+            e.accessAddresses.push(grantee);
+        }
+        e.history.push(CustodyEvent({
+            holderAddress: grantee,
+            holderName: "",
+            action: "grant",
+            description: "Access granted",
+            timestamp: block.timestamp
+        }));
+        emit AccessGranted(caseId, evidenceId, grantee, block.timestamp);
     }
 
-    // Mark evidence as deleted (it still exists but is considered inactive)
-    function deleteEvidence(string memory _evidenceId) public evidenceExists(_evidenceId) onlyOwner(_evidenceId) {
-        evidences[_evidenceId].isDeleted = true;
-        emit EvidenceDeleted(_evidenceId, block.timestamp);
+    /// @notice Revoke access from an address
+    function revokeAccess(
+        string memory caseId,
+        string memory evidenceId,
+        address grantee
+    ) public {
+        bytes32 key = computeKey(caseId, evidenceId);
+        Evidence storage e = evidences[key];
+        require(!e.isDeleted, "Evidence is deleted");
+        require(e.currentHolder == msg.sender || msg.sender == admin, "Not current holder or admin");
+        if (e.accessList[grantee]) {
+            e.accessList[grantee] = false;
+        }
+        e.history.push(CustodyEvent({
+            holderAddress: grantee,
+            holderName: "",
+            action: "revoke",
+            description: "Access revoked",
+            timestamp: block.timestamp
+        }));
+        emit AccessRevoked(caseId, evidenceId, grantee, block.timestamp);
     }
 
-    // View all details about a piece of evidence (only if you have access)
-    function getEvidence(string memory _evidenceId) public view evidenceExists(_evidenceId) hasAccess(_evidenceId) returns (
-        string memory, string memory, address, string memory, string memory, bool
-    ) {
-        Evidence storage e = evidences[_evidenceId];
+    /// @notice Return all addresses ever granted access, and their current status (true/false)
+    function getAccessList(
+        string memory caseId,
+        string memory evidenceId
+    ) public view returns (address[] memory, bool[] memory) {
+        bytes32 key = computeKey(caseId, evidenceId);
+        Evidence storage e = evidences[key];
+        uint len = e.accessAddresses.length;
+        address[] memory addrs = new address[](len);
+        bool[] memory statuses = new bool[](len);
+        for (uint i = 0; i < len; i++) {
+            addrs[i] = e.accessAddresses[i];
+            statuses[i] = e.accessList[addrs[i]];
+        }
+        return (addrs, statuses);
+    }
+
+    // --- VIEWS & ENUMERATION ---
+
+    /// @notice Get current evidence data (ID, case, holder, name, description, IPFS, isDeleted)
+    function viewEvidence(
+        string memory caseId,
+        string memory evidenceId
+    )
+        public view
+        returns (
+            string memory, string memory, address, string memory, string memory, string memory, bool
+        )
+    {
+        bytes32 key = computeKey(caseId, evidenceId);
+        Evidence storage e = evidences[key];
+        require(
+            msg.sender == admin ||
+            e.currentHolder == msg.sender ||
+            e.accessList[msg.sender],
+            "Not authorized"
+        );
         return (
             e.evidenceId,
+            e.caseId,
+            e.currentHolder,
+            e.currentHolderName,
             e.description,
-            e.currentOwner,
-            e.currentOwnerName,
             e.ipfsHash,
             e.isDeleted
         );
     }
 
-    // View full history of actions taken on this piece of evidence
-    function getHistory(string memory _evidenceId) public view evidenceExists(_evidenceId) hasAccess(_evidenceId) returns (
-        CustodyEvent[] memory
-    ) {
-        Evidence storage e = evidences[_evidenceId];
+    /// @notice Get full history of custody/events (audit trail)
+    function getHistory(
+        string memory caseId,
+        string memory evidenceId
+    )
+        public view
+        returns (CustodyEvent[] memory)
+    {
+        bytes32 key = computeKey(caseId, evidenceId);
+        Evidence storage e = evidences[key];
+        require(
+            msg.sender == admin ||
+            e.currentHolder == msg.sender ||
+            e.accessList[msg.sender],
+            "Not authorized"
+        );
         CustodyEvent[] memory hist = new CustodyEvent[](e.history.length);
-        for (uint i = 0; i < e.history.length; i++) {
+        for(uint i = 0; i < e.history.length; i++) {
             hist[i] = e.history[i];
         }
         return hist;
     }
 
-    // Return how many evidence items are in the system
+    /// @notice Number of evidence items registered
     function evidenceCount() public view returns (uint) {
-        return evidenceIds.length;
+        return evidenceKeys.length;
     }
 
-    // Look up an evidence ID by its position in the list
-    function getEvidenceIdAt(uint index) public view returns (string memory) {
-        require(index < evidenceIds.length, "Out of range");
-        return evidenceIds[index];
+    /// @notice Get evidence ID and case ID for an index (for enumeration)
+    function getEvidenceIdAt(uint idx) public view returns (string memory, string memory) {
+        require(idx < evidenceKeys.length, "Out of range");
+        Evidence storage e = evidences[evidenceKeys[idx]];
+        return (e.caseId, e.evidenceId);
     }
 }

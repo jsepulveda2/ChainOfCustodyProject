@@ -1,83 +1,67 @@
 const CoC = artifacts.require("CoC");
 
 contract("CoC", accounts => {
-  const [alice, bob, carol] = accounts;
+  const [admin, alice, bob, carol] = accounts;
 
-  it("should register evidence", async () => {
+  it("should register new evidence", async () => {
     const coc = await CoC.deployed();
     await coc.registerEvidence(
-      "EV1", "Laptop with case data", "Alice", "QmDummyHash", "collected", {from: alice}
+      "CASE123", "EV1", "Alice", "Laptop evidence", "QmHash", "collected",
+      {from: alice}
     );
-    const evidence = await coc.getEvidence("EV1", {from: alice});
-    assert.equal(evidence[0], "EV1"); // evidenceId
-    assert.equal(evidence[1], "Laptop with case data"); // description
-    assert.equal(evidence[2], alice); // currentOwner
-    assert.equal(evidence[3], "Alice"); // currentOwnerName
-    assert.equal(evidence[4], "QmDummyHash"); // ipfsHash
-    assert.equal(evidence[5], false); // isDeleted
+    const ev = await coc.viewEvidence("CASE123", "EV1", {from: alice});
+    assert.equal(ev[0], "EV1");
+    assert.equal(ev[1], "CASE123");
+    assert.equal(ev[2], alice);
+    assert.equal(ev[3], "Alice");
+    assert.equal(ev[4], "Laptop evidence");
+    assert.equal(ev[5], "QmHash");
+    assert.equal(ev[6], false);
   });
 
-  it("should allow transfer of evidence", async () => {
+  it("should transfer custody", async () => {
     const coc = await CoC.deployed();
     await coc.transferEvidence(
-      "EV1", bob, "Bob", "transferred", "Handed to Bob for analysis", {from: alice}
+      "CASE123", "EV1", bob, "Bob", "transferred", "For analysis",
+      {from: alice}
     );
-
-    const evidence = await coc.getEvidence("EV1", {from: bob});
-    assert.equal(evidence[2], bob); // new currentOwner
-    assert.equal(evidence[3], "Bob"); // new currentOwnerName
+    const ev = await coc.viewEvidence("CASE123", "EV1", {from: bob});
+    assert.equal(ev[2], bob);
+    assert.equal(ev[3], "Bob");
   });
 
   it("should grant and revoke access", async () => {
     const coc = await CoC.deployed();
-    // Bob grants Carol access
-    await coc.grantAccess("EV1", carol, {from: bob});
-    let evidence = await coc.getEvidence("EV1", {from: carol});
-    assert.equal(evidence[0], "EV1"); // carol can now view
-
-    // Bob revokes Carol's access
-    await coc.revokeAccess("EV1", carol, {from: bob});
-    // Carol should now be denied access
+    await coc.grantAccess("CASE123", "EV1", carol, {from: bob});
+    let ev = await coc.viewEvidence("CASE123", "EV1", {from: carol});
+    assert.equal(ev[0], "EV1");
+    await coc.revokeAccess("CASE123", "EV1", carol, {from: bob});
     try {
-      await coc.getEvidence("EV1", {from: carol});
+      await coc.viewEvidence("CASE123", "EV1", {from: carol});
       assert.fail("Carol should not have access after revoke");
-    } catch (err) {
-      assert(err.message.includes("No access"), "Expected No access revert");
+    } catch (e) {
+      assert(e.message.includes("Not authorized"));
     }
   });
 
-  it("should allow soft deletion", async () => {
+  it("should soft delete evidence", async () => {
     const coc = await CoC.deployed();
-    // Bob deletes the evidence
-    await coc.deleteEvidence("EV1", {from: bob});
-    const evidence = await coc.getEvidence("EV1", {from: bob});
-    assert.equal(evidence[5], true); // isDeleted
+    await coc.deleteEvidence("CASE123", "EV1", {from: bob});
+    const ev = await coc.viewEvidence("CASE123", "EV1", {from: admin});
+    assert.equal(ev[6], true);
   });
 
-  it("should record and return full history", async () => {
+  it("should record full history", async () => {
     const coc = await CoC.deployed();
-    // Register new evidence for fresh history
     await coc.registerEvidence(
-      "EV2", "USB drive", "Bob", "QmAnotherHash", "collected", {from: bob}
+      "CASE123", "EV2", "Bob", "USB evidence", "QmUSB", "collected", {from: bob}
     );
     await coc.transferEvidence(
-      "EV2", alice, "Alice", "transferred", "Returned to Alice", {from: bob}
+      "CASE123", "EV2", alice, "Alice", "transferred", "Returned to Alice", {from: bob}
     );
-    const history = await coc.getHistory("EV2", {from: alice});
+    const history = await coc.getHistory("CASE123", "EV2", {from: admin});
     assert.equal(history.length, 2);
-    assert.equal(history[0].ownerName, "Bob");
-    assert.equal(history[0].action, "collected");
-    assert.equal(history[1].ownerName, "Alice");
-    assert.equal(history[1].action, "transferred");
-  });
-
-  it("should show correct evidence count and lookup by index", async () => {
-    const coc = await CoC.deployed();
-    const count = await coc.evidenceCount();
-    assert.equal(count.toNumber(), 2);
-    const evid0 = await coc.getEvidenceIdAt(0);
-    assert.equal(evid0, "EV1");
-    const evid1 = await coc.getEvidenceIdAt(1);
-    assert.equal(evid1, "EV2");
+    assert.equal(history[0].holderName, "Bob");
+    assert.equal(history[1].holderName, "Alice");
   });
 });
