@@ -7,6 +7,6 @@ const ACToken = artifacts.require("EvidenceAccessControl");
 
 module.exports = function (deployer, network, accounts) {
   // using coinbase account to deploy smart contract
-  deployer.deploy(CoC, accounts[0])
   deployer.deploy(ACToken, accounts[0])
+  deployer.deploy(CoC, ACToken.address)
 }
