@@ -7,6 +7,8 @@ ChainOfCustody_demo module
 from web3 import Web3, HTTPProvider
 import json
 import datetime
+import ipfshttpclient
+
 
 class ChainOfCustody(object):
     def __init__(self, http_provider, contract_addr, contract_config, account):
