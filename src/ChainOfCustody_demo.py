@@ -30,7 +30,7 @@ class ChainOfCustody(object):
             checksumAddr = self.account
         else:
             checksumAddr = Web3.to_checksum_address(account_addr)
-        return self.web3.fromWei(self.web3.eth.get_balance(checksumAddr), 'ether')
+        return self.web3.from_wei(self.web3.eth.get_balance(checksumAddr), 'ether')
 
     # --- Chain of Custody Functions ---
     def registerEvidence(self, caseId, evidenceId, holderName, description, ipfsHash, action="collected"):
