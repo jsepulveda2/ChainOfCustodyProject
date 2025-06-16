@@ -14,9 +14,9 @@ class ChainOfCustody(object):
     def __init__(self, http_provider, contract_addr, contract_config, account):
         # configuration initialization
         self.web3 = Web3(HTTPProvider(http_provider))
-        self.contract_address = Web3.to_checksum_address(contract_addr)
+        self.contract_address = Web3.toChecksumAddress(contract_addr)
         self.contract_config = json.load(open(contract_config))
-        self.account = Web3.to_checksum_address(account)
+        self.account = Web3.toChecksumAddress(account)
 
         # new contract object
         self.contract = self.web3.eth.contract(address=self.contract_address, abi=self.contract_config['abi'])
@@ -29,8 +29,8 @@ class ChainOfCustody(object):
         if account_addr is None:
             checksumAddr = self.account
         else:
-            checksumAddr = Web3.to_checksum_address(account_addr)
-        return self.web3.from_wei(self.web3.eth.get_balance(checksumAddr), 'ether')
+            checksumAddr = Web3.toChecksumAddress(account_addr)
+        return self.web3.fromWei(self.web3.eth.get_balance(checksumAddr), 'ether')
 
     # --- Chain of Custody Functions ---
     def registerEvidence(self, caseId, evidenceId, holderName, description, ipfsHash, action="collected"):
@@ -46,7 +46,7 @@ class ChainOfCustody(object):
 
     def transferEvidence(self, caseId, evidenceId, to_addr, to_name, action="transferred", desc=""):
         tx = self.contract.functions.transferEvidence(
-            caseId, evidenceId, Web3.to_checksum_address(to_addr), to_name, action, desc
+            caseId, evidenceId, Web3.toChecksumAddress(to_addr), to_name, action, desc
         ).build_transaction({
             'from': self.account,
             'nonce': self.web3.eth.get_transaction_count(self.account)
