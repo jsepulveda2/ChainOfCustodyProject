@@ -85,7 +85,7 @@ if __name__ == "__main__":
     httpProvider = addresses['HttpProvider']
     contractAddr = addresses['EvidenceChainOfCustody']
     userAccount = addresses['DemoUser']  # set this in addr_list.json
-    contractConfig = './build/contracts/EvidenceChainOfCustody.json'
+    contractConfig = '../build/contracts/EvidenceChainOfCustody.json'
 
     # New instance
     coc = ChainOfCustody(httpProvider, contractAddr, contractConfig, userAccount)
