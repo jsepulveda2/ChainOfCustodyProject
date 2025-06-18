@@ -111,7 +111,7 @@ def main_cli():
 	def print_menu():
 		print("\n==================")
 		print("Chain of Custody Demo")
-		print("====================")
+		print("==================")
 		print("1. Register new evidence")
 		print("2. Transfer evidence")
 		print("3. Delete evidence")

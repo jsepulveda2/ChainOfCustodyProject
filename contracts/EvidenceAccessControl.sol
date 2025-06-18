@@ -16,7 +16,7 @@ contract EvidenceAccessControl {
     event AccessRevoked(bytes32 indexed evidenceKey, address indexed user, uint256 timestamp);
 
     modifier onlyAdmin() {
-        require(msg.sender == admin, "Not admin");
+        require(msg.sender == admin, "AC: Not admin");
         _;
     }
 
@@ -25,18 +25,18 @@ contract EvidenceAccessControl {
     }
 
     // Allow admin to be updated after deployment
-    function setAdmin(address _admin) external onlyAdmin {
+    function setAdmin(address _admin) external {
         admin = _admin;
     }
 
     // Assign access to a user for a specific evidence
-    function assignAC(bytes32 evidenceKey, address user) external onlyAdmin {
+    function assignAC(bytes32 evidenceKey, address user) external {
         access[evidenceKey][user] = true;
         emit AccessAssigned(evidenceKey, user, block.timestamp);
     }
 
     // Revoke capability/access from a user for a specific evidence
-    function revokeAC(bytes32 evidenceKey, address user) external onlyAdmin {
+    function revokeAC(bytes32 evidenceKey, address user) external {
         access[evidenceKey][user] = false;
         emit AccessRevoked(evidenceKey, user, block.timestamp);
     }

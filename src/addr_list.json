@@ -1,7 +1,6 @@
 {
-  "HttpProvider": "http://127.0.0.1:8545",
-  "EvidenceChainOfCustody": "0x7c925aC2E08ccC2a6112DB9fcc743685BD1d3005",
-  "EvidenceAccessControl": "0x844fce0038a9859F3Af35FE8257F7e816Bd31896",
-  "DemoUser": "0x675da2ee693e11C8F292a426695B4338D7aFd8D3",
-  "AnotherUser": "0x5B38Da6a701c568545dCfcB03FcB875f56beddC4"
+    "HttpProvider": "http://127.0.0.1:8545",
+    "EvidenceChainOfCustody": "0xc53A95146d53Db1F93517d52C7C906C83bA99FD2",
+    "DemoUser": "0xB8289465A796ae29F0D20aa44566c596601C80E3",
+    "AnotherUser": "0x72f166184b51389c5dD68fB77f452E5a94Bd0b5F"
 }
