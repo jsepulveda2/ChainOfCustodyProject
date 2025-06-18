@@ -117,7 +117,7 @@ def main_cli():
 		print("3. Delete evidence")
 		print("4. View evidence details")
 		print("5. Get evidence history")
-		print("6. List all evidence IDs")
+		print("6. View evidence from specific case")
 		print("0. Exit")
 
 	while True:
@@ -200,11 +200,28 @@ def main_cli():
 		elif choice == "6":
 			try:
 				all_ids = coc.getAllEvidenceIds()
-				print("\nAll evidence IDs:")
-				for evid in all_ids:
-					print(f" - {evid}")
+				if not all_ids:
+					print("No evidence found.")
+				else:
+					caseId = input("Enter case ID: ")
+					print("\nFull Chain of Custody for All Evidence:")
+					for evid in all_ids:
+						print(f"\n=== Evidence ID: {evid} ===")
+						history = coc.getHistory(caseId, evid)
+						if len(history) == 0:
+							print("  No history found.")
+						else:
+							for i, record in enumerate(history):
+								timestamp = datetime.datetime.fromtimestamp(record[4]).strftime('%Y-%m-%d %H:%M:%S')
+								print(f"  Entry #{i+1}:")
+								print(f"    Holder Address: {record[0]}")
+								print(f"    Holder Name: {record[1]}")
+								print(f"    Action: {record[2]}")
+								print(f"    Description: {record[3]}")
+								print(f"    Timestamp: {timestamp}")
 			except Exception as e:
-				print(f"Error listing evidence: {e}")
+				print(f"Error listing chain of custody: {e}")
+
 
 		elif choice == "0":
 			print("Exiting CLI.")
