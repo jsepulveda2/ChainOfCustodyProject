@@ -117,7 +117,7 @@ def main_cli():
 		print("3. Delete evidence")
 		print("4. View evidence details")
 		print("5. Get evidence history")
-		print("6. View evidence from specific case")
+		print("6. View evidence history from specific case")
 		print("0. Exit")
 
 	while True:
