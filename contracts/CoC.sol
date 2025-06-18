@@ -228,4 +228,15 @@ contract EvidenceChainOfCustody {
         Evidence storage e = evidences[evidenceKeys[idx]];
         return (evidenceKeys[idx], e.evidenceId);
     }
+
+
+function getAllEvidenceIds() public view returns (string[] memory) {
+    string[] memory ids = new string[](evidenceKeys.length);
+    for (uint i = 0; i < evidenceKeys.length; i++) {
+        Evidence storage e = evidences[evidenceKeys[i]];
+        ids[i] = e.evidenceId;
+    }
+    return ids;
+}
+
 }
