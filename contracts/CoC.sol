@@ -222,12 +222,12 @@ contract EvidenceChainOfCustody {
         return evidenceKeys.length;
     }
 
-    // Get evidence ID and key at a given index
-    function getEvidenceIdAt(uint idx) public view returns (bytes32, string memory) {
-        require(idx < evidenceKeys.length, "Out of range");
-        Evidence storage e = evidences[evidenceKeys[idx]];
-        return (evidenceKeys[idx], e.evidenceId);
-    }
+    // // Get evidence ID and key at a given index
+    // function getEvidenceIdAt(uint idx) public view returns (bytes32, string memory) {
+    //     require(idx < evidenceKeys.length, "Out of range");
+    //     Evidence storage e = evidences[evidenceKeys[idx]];
+    //     return (evidenceKeys[idx], e.evidenceId);
+    // }
 
 
 function getAllEvidenceIds() public view returns (string[] memory) {

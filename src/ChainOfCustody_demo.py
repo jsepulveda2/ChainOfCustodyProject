@@ -10,7 +10,8 @@ from web3 import Web3, HTTPProvider
 import json
 import datetime
 import warnings
-warnings.filterwarnings("ignore", category=UserWarning, module="ipfshttpclient")
+from ipfshttpclient.exceptions import VersionMismatch   
+warnings.filterwarnings("ignore", category=VersionMismatch)
 
 import ipfshttpclient
 
@@ -72,10 +73,10 @@ class ChainOfCustody(object):
 	def getHistory(self, caseId, evidenceId):
 		return self.contract.functions.getHistory(caseId, evidenceId).call({'from': self.account})
 
-	# Fetch private keys securely
-	def getPrivateKey(self):
-		with open("privatekey.txt") as f:
-			return f.read().strip()
+	# # Fetch private keys securely
+	# def getPrivateKey(self):
+	# 	with open("privatekey.txt") as f:
+	# 		return f.read().strip()
 	
 	def getAllEvidenceIds(self):
 		return self.contract.functions.getAllEvidenceIds().call({'from': self.account})
@@ -84,7 +85,7 @@ def upload_file_to_ipfs(filepath):
 	try:
 		client = ipfshttpclient.connect()
 		res = client.add(filepath)
-		print(f"File uploaded to IPFS with hash: {res['Hash']}")
+		# print(f"File uploaded to IPFS with hash: {res['Hash']}")
 		return res['Hash']
 	except Exception as e:
 		print(f"IPFS upload error: {e}")
@@ -118,6 +119,7 @@ def main_cli():
 		print("4. View evidence details")
 		print("5. Get evidence history")
 		print("6. View evidence history from specific case")
+		print("7. Retrieve evidence file")
 		print("0. Exit")
 
 	while True:
@@ -173,7 +175,7 @@ def main_cli():
 				print(f"Current Holder: {e[1]}")
 				print(f"Holder Name: {e[2]}")
 				print(f"Description: {e[3]}")
-				print(f"IPFS Hash: {e[4]}")
+				# print(f"IPFS Hash: {e[4]}")
 				print(f"Deleted: {'Yes' if e[5] else 'No'}")
 			except Exception as e:
 				print(f"Error viewing evidence: {e}")
@@ -203,24 +205,69 @@ def main_cli():
 				if not all_ids:
 					print("No evidence found.")
 				else:
-					caseId = input("Enter case ID: ")
-					print("\nFull Chain of Custody for All Evidence:")
+					caseId = input("Enter case ID to filter (or press Enter for all): ").strip()
+					print("\nFull Chain of Custody:")
 					for evid in all_ids:
-						print(f"\n=== Evidence ID: {evid} ===")
-						history = coc.getHistory(caseId, evid)
-						if len(history) == 0:
-							print("  No history found.")
-						else:
-							for i, record in enumerate(history):
-								timestamp = datetime.datetime.fromtimestamp(record[4]).strftime('%Y-%m-%d %H:%M:%S')
-								print(f"  Entry #{i+1}:")
-								print(f"    Holder Address: {record[0]}")
-								print(f"    Holder Name: {record[1]}")
-								print(f"    Action: {record[2]}")
-								print(f"    Description: {record[3]}")
-								print(f"    Timestamp: {timestamp}")
+						try:
+							# Check if evidence belongs to the specified caseId
+							if caseId:
+								e = coc.viewEvidence(caseId, evid)
+								# Only print if match and not deleted
+								if e[0] != evid:
+									continue
+							else:
+								# Try all possible case IDs if no case ID is provided
+								e = coc.viewEvidence("dummy", evid)  # Skip for now but add logic for when caseId is provieded automatically
+							
+							print(f"\n=== Evidence ID: {evid} ===")
+							history = coc.getHistory(caseId, evid)
+							if len(history) == 0:
+								print("  No history found.")
+							else:
+								for i, record in enumerate(history):
+									timestamp = datetime.datetime.fromtimestamp(record[4]).strftime('%Y-%m-%d %H:%M:%S')
+									print(f"  Entry #{i+1}:")
+									print(f"    Holder Address: {record[0]}")
+									print(f"    Holder Name: {record[1]}")
+									print(f"    Action: {record[2]}")
+									print(f"    Description: {record[3]}")
+									print(f"    Timestamp: {timestamp}")
+									
+
+						except:
+							continue  # Skip evidence that doesn't belong to this caseId
 			except Exception as e:
 				print(f"Error listing chain of custody: {e}")
+
+		elif choice == "7":
+			caseId = input("Enter case ID: ").strip()
+			evidenceId = input("Enter evidence ID to retrieve: ").strip()
+			holderName = input("Enter your name: ").strip()
+			description = input("Reason for retrieval: ").strip()
+			action = "retrieved"
+
+			if not evidenceId or not caseId:
+				print("Evidence ID and Case ID are required.")
+			else:
+				try:
+					# View the evidence to get IPFS hash and check existence
+					e = coc.viewEvidence(caseId, evidenceId)
+					ipfs_hash = e[4]
+					print(f"\nIPFS Hash: {ipfs_hash}")
+
+					# Log retrieval as an action in the chain
+					# receipt = coc.transferEvidence(caseId, evidenceId, coc.account, holderName, "retrieved", description) #  !!!need logic for retrieval instead
+					
+
+
+
+				except Exception as err:
+					print(f"Error retrieving evidence: {err}")
+
+
+			
+
+
 
 
 		elif choice == "0":
@@ -238,7 +285,7 @@ if __name__ == "__main__":
 	
 	# # Register new evidence
 	# print("\n Registering New Evidence...")
-	# receipt = coc.registerEvidence(caseId, evidenceId, userAcc, evidenceDescription, "QpIPFSHash001")
+	# receipt = coc.registerEvidence(caseId, evidenceId, userAcc, evidenceDescription, "ash001")
 	# print(f" Registered evidence. Tx Hash: {receipt.transactionHash.hex()} | Block #: {receipt.blockNumber}")
 
 	# # View evidence
@@ -312,3 +359,4 @@ if __name__ == "__main__":
 	# 				print(f"    Timestamp:      {timestamp}")
 	# 		except Exception as e:
 	# 			print(f"Could not fetch history: {e}")
+
