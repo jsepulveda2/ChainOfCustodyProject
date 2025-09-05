@@ -196,19 +196,32 @@ contract EvidenceChainOfCustody {
         );
     }
 
-    // Get full custody history of an evidence
+    // Get full custody history of piece of evidence
     function getHistory(string memory caseId, string memory evidenceId)
         public view
         returns (CustodyEvent[] memory)
     {
+        // Compute a unique key based on the case ID + evidence ID given
         bytes32 key = computeKey(caseId, evidenceId);
+
+        // Look up the evidence record from storage using the key
         Evidence storage e = evidences[key];
+
+        // Access control check:
+        // Only the admin, the current holder, or someone with granted access
+        // can view this evidence history.
+        // If this condition is NOT met, the function will immediately stop
+        // and return an error message: "Not authorized".
         require(
             msg.sender == admin ||
             msg.sender == e.currentHolder ||
             acToken.query_CapAC(key, msg.sender),
             "Not authorized"
         );
+
+        // If the require check passes, the function will continue
+        // and return the custody history of the evidence.
+
 
         CustodyEvent[] memory hist = new CustodyEvent[](e.history.length);
         for(uint i = 0; i < e.history.length; i++) {
